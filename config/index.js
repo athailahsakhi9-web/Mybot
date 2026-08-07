@@ -1,25 +1,25 @@
 const config = {
   bot: {
-    name: "Nexa Bot",
+    name: "Vortex Bot",
     version: "1.1.0",
-    description: "WhatsApp Bot By NexaDev",
-    developer: "Nexa Dev",
-    support: "https://wa.me/628xxxx",
-    number: "628xxxxxx", // samakan dengan pairing code
+    description: "WhatsApp Bot By KaizenDev",
+    developer: "Kaizen Dev",
+    support: "https://wa.me/6282113856471",
+    number: "6282113856471", // samakan dengan pairing code
     prefix: ".",
   },
 
   session: {
     folderName: "session",
     usePairingCode: true,
-    pairingNumber: "628xxxxxxxx", // nomer pairing code 
+    pairingNumber: "6282113856471", // nomer pairing code 
     printQRInTerminal: false,
     maxReconnectAttempts: 10,
     reconnectInterval: 5000,
   },
 
   owner: [
-    "628xxxxxx@s.whatsapp.net", //masukan nomer owner
+    "6282113856471@s.whatsapp.net", //masukan nomer owner
   ],
 
   partner: [],
@@ -27,7 +27,7 @@ const config = {
   saluran: {
     id: "120363208449943317@newsletter",
     name: "Nexa Bot",
-    link: "https://wa.me/628xxxxxx",
+    link: "https://wa.me/6282113856471",
   },
 
   features: {
@@ -35,7 +35,7 @@ const config = {
     autoTyping: true,
     antiSpam: true,
     logMessage: true,
-    antiCall: true,
+    antiCall: false,
     blockIfCall: false,
     smartTriggers: true,
   },
