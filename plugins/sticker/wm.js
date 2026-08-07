@@ -1,48 +1,26 @@
 const { downloadContentFromMessage } = require('nexa')
+const webpmux = require('node-webpmux')
 
-function buildStickerExif(metadata) {
-    const json = Buffer.from(JSON.stringify(metadata), 'utf-8')
-    const exif = Buffer.concat([
-        Buffer.from([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00, 0x01, 0x00, 0x41, 0x57, 0x07, 0x00]),
-        Buffer.alloc(4),
-        Buffer.from([0x16, 0x00, 0x00, 0x00]),
-        json,
+// ─── Tulis EXIF pakai node-webpmux ──────────────────────────────────────────────
+// Kenapa ganti dari manual buffer-editing: cara lama nyusun ulang chunk VP8X/EXIF
+// byte-per-byte, dan gampang meleset kalau sticker sumbernya punya struktur WEBP
+// yang agak beda (ICC profile, urutan chunk nggak standar, dll) — makanya kadang
+// pack-name/author-nya nggak kebaca. node-webpmux parse & nulis ulang container
+// WEBP secara benar sesuai spec, jadi lebih reliable buat kasus sticker "asing".
+async function setWebpExif(webpBuffer, metadata) {
+    const img = new webpmux.Image()
+    await img.load(webpBuffer)
+
+    const exifHeader = Buffer.from([
+        0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00, 0x01, 0x00, 0x41, 0x57, 0x07, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x16, 0x00, 0x00, 0x00
     ])
-    exif.writeUInt32LE(json.length, 14)
-    return exif
-}
+    const json = Buffer.from(JSON.stringify(metadata), 'utf-8')
+    const exif = Buffer.concat([exifHeader, json])
+    exif.writeUIntLE(json.length, 14, 4)
 
-function makeChunk(type, data) {
-    const typeBuffer = Buffer.from(type)
-    const sizeBuffer = Buffer.alloc(4)
-    sizeBuffer.writeUInt32LE(data.length, 0)
-    const padding = data.length % 2 === 1 ? Buffer.from([0x00]) : Buffer.alloc(0)
-    return Buffer.concat([typeBuffer, sizeBuffer, data, padding])
-}
-
-function setWebpExif(webpBuffer, metadata) {
-    if (webpBuffer.slice(0, 4).toString() !== 'RIFF' || webpBuffer.slice(8, 12).toString() !== 'WEBP') {
-        throw new Error('File bukan WEBP valid.')
-    }
-    const chunks = []
-    let offset = 12
-    while (offset + 8 <= webpBuffer.length) {
-        const type = webpBuffer.slice(offset, offset + 4).toString()
-        const size = webpBuffer.readUInt32LE(offset + 4)
-        const chunkStart = offset
-        const chunkEnd = offset + 8 + size + (size % 2)
-        if (chunkEnd > webpBuffer.length) break
-        if (type !== 'EXIF') chunks.push(webpBuffer.slice(chunkStart, chunkEnd))
-        offset = chunkEnd
-    }
-    const exifPayload = buildStickerExif(metadata)
-    const exifChunk = makeChunk('EXIF', exifPayload)
-    const body = Buffer.concat([...chunks, exifChunk])
-    const header = Buffer.alloc(12)
-    header.write('RIFF', 0)
-    header.writeUInt32LE(body.length + 4, 4)
-    header.write('WEBP', 8)
-    return Buffer.concat([header, body])
+    img.exif = exif
+    return await img.save(null) // null path → return Buffer, tidak nulis ke disk
 }
 
 const pluginConfig = {
@@ -95,7 +73,7 @@ async function handler(m, { sock }) {
             return m.reply('❌ Gagal mendownload sticker.')
         }
 
-        const finalBuffer = setWebpExif(stickerBuffer, {
+        const finalBuffer = await setWebpExif(stickerBuffer, {
             'sticker-pack-id':        'NexaBot',
             'sticker-pack-name':      packname,
             'sticker-pack-publisher': publisher,

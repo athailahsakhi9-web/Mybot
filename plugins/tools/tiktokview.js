@@ -1,107 +1,87 @@
-const axios = require("axios");
-const fs = require("fs");
-const path = require("path");
-const DB_FILE = path.join(process.cwd(), "base", "ttdata.json");
+const fetch = require('node-fetch')
+
 const pluginConfig = {
-  name: "tiktokview",
-  alias: ["ttview", "ttv", "viewtt"],
-  category: "tools",
-  description: "Tambah view TikTok via API",
-  usage: ".tiktokview <url_tiktok>",
-  example: ".tiktokview https://www.tiktok.com/@user/video/1234567890",
-  isOwner: false,
-  isPremium: false,
-  isGroup: false,
-  isPrivate: false,
-  cooldown: 10,
-  energi: 1,
-  isEnabled: true,
-};
-function loadDB() {
-  try {
-    if (!fs.existsSync(DB_FILE)) return { users: {} };
-    const raw = fs.readFileSync(DB_FILE, "utf8");
-    if (!raw.trim()) return { users: {} };
-    const db = JSON.parse(raw);
-    if (!db.users) db.users = {};
-    return db;
-  } catch {
-    return { users: {} };
-  }
+    name: 'tiktokview',
+    alias: ['ttview', 'ttviews', 'tiktokviews', 'viewtt'],
+    category: 'tools',
+    description: 'Suntik views video TikTok (Owner Only)',
+    usage: '.tiktokview <url tiktok> [quantity]',
+    example: '.tiktokview https://vt.tiktok.com/ZSXgNLYbL/ 100',
+    cooldown: 15,
+    energi: 1,
+    isOwner: true, // 🔒 Ditangani langsung oleh checkPermission di messageHandler
+    isEnabled: true
 }
-function saveDB(db) {
-  fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });
-  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+
+// Map manual untuk mengubah teks biasa menjadi Small Caps font style
+const SMALL_CAPS_MAP = {
+    'a': 'ᴀ', 'b': 'ʙ', 'c': 'ᴄ', 'd': 'ᴅ', 'e': 'ᴇ', 'f': 'ꜰ', 'g': 'ɢ', 'h': 'ʜ', 'i': 'ɪ', 
+    'j': 'ᴊ', 'k': 'ᴋ', 'l': 'ʟ', 'm': 'ᴍ', 'n': 'ɴ', 'o': 'ᴏ', 'p': 'ᴘ', 'q': 'ǫ', 'r': 'ʀ', 
+    's': 's', 't': 'ᴛ', 'u': 'ᴜ', 'v': 'ᴠ', 'w': 'ᴡ', 'x': 'x', 'y': 'ʏ', 'z': 'ᴢ',
+    'A': 'ᴀ', 'B': 'ʙ', 'C': 'ᴄ', 'D': 'ᴅ', 'E': 'ᴇ', 'F': 'ꜰ', 'G': 'ɢ', 'H': 'ʜ', 'I': 'ɪ', 
+    'J': 'ᴊ', 'K': 'ᴋ', 'L': 'ʟ', 'M': 'ᴍ', 'N': 'ɴ', 'O': 'ᴏ', 'P': 'ᴘ', 'Q': 'ǫ', 'R': 'ʀ', 
+    'S': 's', 'T': 'ᴛ', 'U': 'ᴜ', 'V': 'ᴠ', 'W': 'ᴡ', 'X': 'x', 'Y': 'ʏ', 'Z': 'ᴢ'
 }
-function extractTikTokUrl(text = "") {
-  const match = text.match(/https?:\/\/(?:www\.)?(?:tiktok\.com|vm\.tiktok\.com|vt\.tiktok\.com)\/\S+/i);
-  return match ? match[0].replace(/[)\],.]+$/g, "") : "";
+
+function toSmallCaps(text) {
+    return text.split('').map(char => SMALL_CAPS_MAP[char] || char).join('')
 }
-function isValidTikTokUrl(url = "") {
-  return /^https?:\/\/(?:www\.)?(?:tiktok\.com|vm\.tiktok\.com|vt\.tiktok\.com)\/\S+/i.test(url.trim());
+
+async function handler(m, { sock, args, config }) {
+    let ttUrl = args[0] || (m.quoted?.text)
+    let quantity = args[1] || '100' // Default 100 jika tidak diisi
+
+    if (!ttUrl) {
+        return m.reply(toSmallCaps('⚠️ Masukkan link TikTok!\n\n*Contoh:* .tiktokview https://vt.tiktok.com/ZSXgNLYbL/ 100'))
+    }
+
+    if (!ttUrl.includes('tiktok.com')) {
+        return m.reply(toSmallCaps('⚠️ URL tidak valid! Harap masukkan link TikTok yang benar.'))
+    }
+
+    // Ambil Base URL & API Key dari config/index.js
+    const baseUrl = config?.api?.apinexa || 'https://api.nexadev.my.id'
+    const apiKey = config?.APIkey?.apinexa || config?.APIkey?.nexaai || 'nexa'
+
+    await m.react('⏳')
+
+    try {
+        // Panggil API TikTok View NexaDev (Timeout 2 Menit = 120.000 ms)
+        const apiUrl = `${baseUrl}/api/tiktokview?key=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(ttUrl)}&quantity=${encodeURIComponent(quantity)}`
+        const res = await fetch(apiUrl, { timeout: 120000 })
+        
+        if (!res.ok) throw new Error(`API HTTP status ${res.status}`)
+        
+        const json = await res.json()
+        
+        if (!json || json.status === false) {
+            throw new Error(json?.message || json?.error || 'Gagal memproses views ke TikTok')
+        }
+
+        // Ekstraksi hasil respon API
+        const rawData = json.data || json.result || json
+        let resultMsg = typeof rawData === 'string' ? rawData : (json.message || 'Order views berhasil dikirim!')
+
+        await m.react('📥')
+
+        // Susun Caption Hasil Operasi
+        let caption = `👁️ *${toSmallCaps('ᴛɪᴋᴛᴏᴋ ᴠɪᴇᴡs ʙᴏᴏsᴛᴇʀ')}*\n\n`
+        caption += `╭┈┈⬡「 📋 *${toSmallCaps('ᴏʀᴅᴇʀ ɪɴꜰᴏ')}* 」\n`
+        caption += `┃ 🎯 ${toSmallCaps('ǫᴜᴀɴᴛɪᴛʏ')}: *${quantity} Views*\n`
+        caption += `┃ 📝 ${toSmallCaps('sᴛᴀᴛᴜs')}: *${resultMsg}*\n`
+        caption += `╰┈┈┈┈┈┈┈┈⬡\n\n`
+        caption += `⚡ ${toSmallCaps('ᴘᴏᴡᴇʀᴇᴅ ʙʏ')}: *NexaDev API*`
+
+        await m.reply(caption)
+        await m.react('✅')
+
+    } catch (err) {
+        await m.react('❌')
+        return m.reply(toSmallCaps(`❌ Gagal memproses TikTok Views: ${err.message}`))
+    }
 }
-async function handler(m, context) {
-  const sender = m.sender;
-  const argsText = (m.args || []).join(" ").trim();
-  const url = extractTikTokUrl(argsText) || (m.args?.[0] ? String(m.args[0]).trim() : "");
-  if (!url) {
-    await m.reply(
-      `⌛ *Format salah*\n\n` +
-      `Contoh:\n` +
-      `\`.tiktokview https://www.tiktok.com/@user/video/1234567890\``
-    );
-    return { handled: true };
-  }
-  if (!isValidTikTokUrl(url)) {
-    await m.reply(
-      `❌ *URL TikTok tidak valid*\n\n` +
-      `Gunakan link video TikTok yang benar.`
-    );
-    return { handled: true };
-  }
-  const db = loadDB();
-  const user = db.users[sender] || {
-    used: false,
-    usedAt: null,
-    total: 0,
-    lastOrderId: null,
-  };
-  if (user.used) {
-    await m.reply(
-      `❌ *Limit habis*\n\n` +
-      `Kamu hanya bisa memakai fitur ini *1 kali per user*.`
-    );
-    return { handled: true };
-  }
-  await m.react("⌛");
-  try {
-    const apiUrl = `https://clooud.my.id/api/tiktok-view/?url=${encodeURIComponent(url)}`;
-    const { data } = await axios.get(apiUrl, { timeout: 30000 });
-    const orderId = data?.data?.id || null;
-    user.used = true;
-    user.usedAt = new Date().toISOString();
-    user.total += 1;
-    user.lastOrderId = orderId;
-    db.users[sender] = user;
-    saveDB(db);
-    await m.react("✅");
-    await m.reply(
-      `✅ *TikTok View berhasil*\n\n` +
-      `╭┈┈⬡「 📋 *Detail* 」\n` +
-      `┃ 🔗 URL: \`${url}\`\n` +
-      `┃ 🧾 Order ID: *${orderId || "-"}*\n` +
-      `┃ 📦 Status: *${data?.status ? "Berhasil" : "Diproses"}*\n` +
-      `┃ 🎫 Sisa Pemakaian: *0/1*\n` +
-      `╰┈┈⬡`
-    );
-    return { handled: true };
-  } catch (err) {
-    await m.react("❌");
-    await m.reply(
-      `❌ *Gagal menjalankan TikTok View*\n\n` +
-      `> ${err.message || "Terjadi kesalahan saat menghubungi API."}`
-    );
-    return { handled: true };
-  }
+
+module.exports = {
+    config: pluginConfig,
+    handler
 }
-module.exports = { config: pluginConfig, handler };

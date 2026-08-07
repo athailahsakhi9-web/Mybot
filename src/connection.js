@@ -89,9 +89,9 @@ async function startConnection(options = {}) {
     throw err;
   }
 
-  // Version hardcode untuk fix pairing
-  const version = [2, 3000, 1034074495];
-  colors.logger.info("WA", `Baileys version: v${version.join(".")}`);
+  // Versi Baileys di-hardcode manual (fetchLatestBaileysVersion() di-skip).
+  const version = [2, 3000, 1043857760];
+  colors.logger.info("WA", `Baileys version: v${version.join(".")} (manual)`);
 
   const usePairingCode = config.session?.usePairingCode === true;
 
@@ -225,7 +225,7 @@ async function startConnection(options = {}) {
         // Tunggu 3 detik agar socket benar-benar siap menerima request
         await new Promise(r => setTimeout(r, 3000));
         try {
-          const code = await sock.requestPairingCode(phoneNumber);
+          const code = await sock.requestPairingCode(phoneNumber, "NEXAABOT");
           console.log("");
           console.log(colors.createBanner([
             "",

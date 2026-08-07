@@ -21,21 +21,22 @@ const { prepareWAMessageMedia, generateWAMessageFromContent, proto } = baileysMo
 const LOCAL_IMG = path.join(process.cwd(), "assets", "images", "nexa02.jpg");
 
 const CATEGORY_INFO = {
-  main:       { icon: "⬩",  label: "Main" },
-  group:      { icon: "◈",  label: "Grup" },
-  user:       { icon: "👤",  label: "User" },
-  ai:         { icon: "🤖",  label: "AI" },
-  download:   { icon: "📥",  label: "Download" },
-  downloader: { icon: "📥",  label: "Downloader" },
-  tools:      { icon: "🛠",  label: "Tools" },
-  media:      { icon: "📸",  label: "Media" },
-  sticker:    { icon: "✨",  label: "Sticker" },
-  fun:        { icon: "🎮",  label: "Fun & Games" },
-  canvas:     { icon: "🎨",  label: "Canvas" },
-  search:     { icon: "🔍",  label: "Search" },
-  owner:      { icon: "👑",  label: "Owner" },
-  other:      { icon: "🧩",  label: "Lainnya" },
+  main:       { icon: "✢",  label: "Main",        desc: "Perintah utama dan pengaturan dasar bot" },
+  group:      { icon: "✢",  label: "Grup",        desc: "Kelola grup dengan fitur moderasi dan kontrol penuh" },
+  user:       { icon: "👤",  label: "User",        desc: "Kelola profil dan pengaturan akun kamu" },
+  ai:         { icon: "🤖",  label: "AI",          desc: "Gunakan kecerdasan buatan untuk berbagai kebutuhan", popular: true },
+  download:   { icon: "📥",  label: "Download",    desc: "Download video, audio, dan gambar dari berbagai platform", popular: true },
+  downloader: { icon: "📥",  label: "Downloader",  desc: "Download video, audio, dan gambar dari berbagai platform", popular: true },
+  tools:      { icon: "🛠",  label: "Tools",       desc: "Kumpulan tools serbaguna untuk berbagai keperluan" },
+  media:      { icon: "📸",  label: "Media",       desc: "Edit dan olah media dengan berbagai fitur menarik" },
+  sticker:    { icon: "✨",  label: "Sticker",     desc: "Buat dan edit stiker sesuai keinginanmu" },
+  fun:        { icon: "🎮",  label: "Fun & Games", desc: "Kumpulan game dan hiburan seru untuk mengisi waktu" },
+  canvas:     { icon: "🎨",  label: "Canvas",      desc: "Buat efek keren untuk foto dan teks dengan berbagai gaya unik" },
+  search:     { icon: "🔍",  label: "Search",      desc: "Cari informasi dan referensi dari berbagai sumber" },
+  owner:      { icon: "👑",  label: "Owner",       desc: "Fitur khusus untuk owner dan admin bot" },
+  other:      { icon: "🧩",  label: "Lainnya",     desc: "Kumpulan perintah lainnya" },
 };
+// Tambahkan "popular: true" di kategori manapun yang ingin ditandai 🔥 Populer
 
 function getUptimeStr() {
   const connectedAt = global._botConnectedAt || Date.now();
@@ -178,7 +179,7 @@ async function makeFakeQuoted(botName) {
             status: 1,
             surface: 1,
             message: botName || "NexaBot",
-            orderTitle: "Nexa Bot Menu",
+            orderTitle: `${botName || "NexaBot"} Menu`,
             thumbnail: fs.existsSync(LOCAL_IMG) ? fs.readFileSync(LOCAL_IMG) : undefined,
             sellerJid: "0@s.whatsapp.net",
           },
@@ -253,8 +254,9 @@ module.exports = {
     const botName   = config.bot?.name      || "NexaBot";
     const ownerName = config.bot?.developer || "NexaDev";
 
+    // ─── DYNAMIC HEADER ───
     const bodyText =
-      `乂  𝗡𝗘𝗫𝗔 𝗕𝗢𝗧\n\n` +
+      `乂  ${botName.toUpperCase()}\n\n` +
       `┌  ◦  ᴜᴘᴛɪᴍᴇ   : ${getUptimeStr()}\n` +
       `│  ◦  ᴘʀᴇꜰɪx   : [ ${prefix} ]\n` +
       `│  ◦  ᴛᴏᴛᴀʟ    : ${allPlugins.length} Command\n` +
@@ -263,21 +265,37 @@ module.exports = {
       `ɢᴜɴᴀᴋᴀɴ ᴛᴏᴍʙᴏʟ ᴅɪ ʙᴀᴡᴀʜ ᴜɴᴛᴜᴋ ɴᴀᴠɪɢᴀꜱɪ 👇`;
 
     // Build category rows for interactive message
-    const categoryRows = Object.entries(categoryMap).map(([cat, plugins]) => {
-      const info = CATEGORY_INFO[cat] || { icon: "🧩", label: cat };
-      return {
-        title: `${info.icon} ${info.label.toUpperCase()}`,
-        description: `Memiliki (${plugins.length}) Perintah`,
-        id: `${prefix}menucat ${cat}`,
-      };
-    });
+    const categoryRows = Object.entries(categoryMap)
+      .sort(([a], [b]) => {
+        const labelA = CATEGORY_INFO[a]?.label || a;
+        const labelB = CATEGORY_INFO[b]?.label || b;
+        return labelA.localeCompare(labelB);
+      })
+      .map(([cat, plugins]) => {
+        const info = CATEGORY_INFO[cat] || { icon: "🧩", label: cat, desc: "Kumpulan perintah lainnya" };
+        const badge = info.popular ? `🔥 Populer (${plugins.length} Fitur)` : `${plugins.length} Fitur`;
+        return {
+          title: `${info.icon} ${info.label}`,
+          description: info.desc,
+          id: `${prefix}menucat ${cat}`,
+          badge,
+        };
+      });
+
+    // WA cuma render "highlight_label" di level section (bukan per-row), jadi tiap
+    // kategori dijadikan 1 section sendiri supaya badge di kanan bisa beda-beda per baris.
+    const categorySections = categoryRows.map(({ title, description, id, badge }) => ({
+      title: "",
+      highlight_label: badge,
+      rows: [{ title, description, id }],
+    }));
 
     const buttons = [
       {
         name: "single_select",
         buttonParamsJson: JSON.stringify({
           title: "⌯⌲ ᴘɪʟɪʜ ᴋᴀᴛᴇɢᴏʀɪ",
-          sections: [{ title: "ᴅᴀꜰᴛᴀʀ ᴋᴀᴛᴇɢᴏʀɪ ᴍᴇɴᴜ", rows: categoryRows }],
+          sections: categorySections,
           icon: "DEFAULT",
         }),
       },
@@ -288,10 +306,10 @@ module.exports = {
           sections: [{
             title: "Pilihan Lainnya",
             rows: [
-              { title: "❀ ʟɪʜᴀᴛ ꜱᴇᴍᴜᴀ ᴍᴇɴᴜ", description: "Tampilkan semua command", id: `${prefix}allmenu` },
-              { title: "🤖 Info Bot",          description: "Informasi tentang bot",   id: `${prefix}botinfo` },
-              { title: "👤 Profil Kamu",      description: "Lihat data profil kamu",  id: `${prefix}profile` },
-                { title: "ⓘ rules",      description: "Lihat Rules",  id: `${prefix}rules` },
+              { title: "📋 Semua Menu",  description: `Tampilkan seluruh ${allPlugins.length} command`, id: `${prefix}allmenu` },
+              { title: "🤖 Info Bot",    description: "Statistik & informasi lengkap bot",              id: `${prefix}botinfo` },
+              { title: "👤 Profil Kamu", description: "Lihat data & statistik profil kamu",             id: `${prefix}profile` },
+              { title: "📜 Rules",       description: "Baca aturan penggunaan bot",                     id: `${prefix}rules` },
             ],
           }],
           icon: "REVIEW",

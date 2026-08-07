@@ -28,7 +28,26 @@ async function isSpamming(jid) {
 async function resolveGroupAdmin(sock, groupJid, userJid) {
   try {
     const meta = await sock.groupMetadata(groupJid);
-    const participant = meta?.participants?.find(p => p.id === userJid || p.lid === userJid);
+    if (!meta?.participants) return false;
+
+    const normalize = (jid) => {
+      if (!jid) return [];
+      const noDevice = jid.split(':')[0];
+      const numberOnly = noDevice.split('@')[0];
+      return [jid, noDevice, numberOnly];
+    };
+
+    const targets = new Set(normalize(userJid));
+
+    if (sock.user?.id === userJid && sock.user?.lid) {
+      normalize(sock.user.lid).forEach(v => targets.add(v));
+    }
+
+    const participant = meta.participants.find(p => {
+      const fields = [p.id, p.jid, p.lid, p.phoneNumber];
+      return fields.some(f => normalize(f).some(v => targets.has(v)));
+    });
+
     return !!participant?.admin;
   } catch {
     return false;
@@ -57,6 +76,14 @@ async function checkPermission(m, pluginConfig, sock) {
     isAdmin = await resolveGroupAdmin(sock, m.chat, m.sender);
   }
 
+  // Live-check status admin bot — jangan pakai m.isBotAdmin dari serialize
+  // karena sering false akibat JID device suffix mismatch (:20@s.whatsapp.net vs @s.whatsapp.net)
+  let isBotAdmin = !!m.isBotAdmin;
+  if (m.isGroup && !isBotAdmin && sock) {
+    const botId = sock.user?.id || '';
+    if (botId) isBotAdmin = await resolveGroupAdmin(sock, m.chat, botId);
+  }
+
   if (pluginConfig.isOwner && !m.isOwner && !hasAccess)
     return { allowed: false, reason: config.messages?.ownerOnly || "⛔ Owner only!" };
 
@@ -75,8 +102,19 @@ async function checkPermission(m, pluginConfig, sock) {
   if (pluginConfig.isAdmin && m.isGroup && !isAdmin && !m.isOwner && !hasAccess)
     return { allowed: false, reason: config.messages?.adminOnly || "👮 Admin only!" };
 
-  if (pluginConfig.isBotAdmin && m.isGroup && !m.isBotAdmin)
+  if (pluginConfig.isBotAdmin && m.isGroup && !isBotAdmin) {
+    try {
+      const meta = await sock.groupMetadata(m.chat);
+      logger.error("BotAdminCheck", JSON.stringify({
+        sockUserId: sock.user?.id,
+        sockUserLid: sock.user?.lid,
+        participants: meta?.participants?.map(p => ({
+          id: p.id, jid: p.jid, lid: p.lid, phoneNumber: p.phoneNumber, admin: p.admin,
+        })),
+      }));
+    } catch {}
     return { allowed: false, reason: config.messages?.botAdminOnly || "🤖 Bot harus admin!" };
+  }
 
   return { allowed: true, reason: "" };
 }
@@ -140,6 +178,11 @@ module.exports = {
 
       if (m.isBanned) return;
 
+      if (m.isGroup && !m.isOwner) {
+        const groupData = db.getGroup(m.chat) || {};
+        if (groupData.mutegc) return;
+      }
+
       const botId = sock.user?.id?.split(":")[0] || "unknown";
       const msgKey = `${botId}_${m.chat}_${m.sender}_${m.id}`;
       if (debounceMessage(msgKey)) return;
@@ -197,18 +240,16 @@ module.exports = {
       }
 
       if (!m.isCommand) {
-        // ================= [ INTEGRASI PLUGIN ANTI-TAG OWNER ] =================
         try {
           const antitagPlugin = require("../../plugins/owner/antitagowner");
           const ctx = { sock, db, config };
           if (antitagPlugin?.onMessage) {
             const isHandled = await antitagPlugin.onMessage(m, ctx);
-            if (isHandled) return; // Menghentikan proses non-command lain jika tag owner terdeteksi
+            if (isHandled) return;
           }
         } catch (e) {
           logger.error("AntiTagOwner_Load", e.message);
         }
-        // =======================================================================
 
         try {
           const afkPlugin = require("../../plugins/group/afk");
@@ -245,6 +286,26 @@ module.exports = {
         try {
           const sambungkata = require("../../plugins/fun/sambungkata");
           if (sambungkata?.checkJawaban) await sambungkata.checkJawaban(m, { sock, db });
+        } catch {}
+
+        try {
+          const tebakbendera = require("../../plugins/fun/tebakbendera");
+          if (tebakbendera?.checkJawaban) await tebakbendera.checkJawaban(m, { sock, db });
+        } catch {}
+
+        try {
+          const tebakwarna = require("../../plugins/fun/tebakwarna");
+          if (tebakwarna?.checkJawaban) await tebakwarna.checkJawaban(m, { sock, db });
+        } catch {}
+
+        try {
+          const tebaklagu = require("../../plugins/fun/tebaklagu");
+          if (tebaklagu?.checkJawaban) await tebaklagu.checkJawaban(m, { sock, db });
+        } catch {}
+
+        try {
+          const tebakheroml = require("../../plugins/fun/tebakheroml");
+          if (tebakheroml?.checkJawaban) await tebakheroml.checkJawaban(m, { sock, db });
         } catch {}
 
         return;

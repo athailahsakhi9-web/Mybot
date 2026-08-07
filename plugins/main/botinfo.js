@@ -18,6 +18,17 @@ module.exports = {
   async handler(m, { sock, config, db }) {
     await m.react("⏰");
 
+    // ── Config (ambil dari config/index.js) ───────────────────
+    const botName   = config.bot?.name      || "NexaBot";
+    const botVer    = config.bot?.version   || "1.0.0";
+    const devName   = config.bot?.developer || "NexaDev";
+    const support   = config.bot?.support   || "-";
+    const prefix    = m.prefix              || ".";
+    const mode      = config.config?.mode   || "public";
+    const modeText  = mode === "public" ? "🌍 Publik" : "🔒 Self";
+    const ownerNum  = (config.owner?.[0] || "").replace("@s.whatsapp.net", "");
+    const saluranLink = config.saluran?.link || config.bot?.support || "-";
+
     // ── System ───────────────────────────────────────────────
     const memUsed    = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
     const memTotal   = (os.totalmem() / 1024 / 1024).toFixed(0);
@@ -72,20 +83,9 @@ module.exports = {
       ...wibOpts, hour: "2-digit", minute: "2-digit", second: "2-digit",
     });
 
-    // ── Config ───────────────────────────────────────────────
-    const botName   = config.bot?.name      || "NexaBot";
-    const botVer    = config.bot?.version   || "1.0.0";
-    const devName   = config.bot?.developer || "NexaDev";
-    const support   = config.bot?.support   || "-";
-    const prefix    = m.prefix              || ".";
-    const mode      = config.config?.mode   || "public";
-    const modeText  = mode === "public" ? "🌍 Publik" : "🔒 Self";
-    const ownerNum  = (config.owner?.[0] || "").replace("@s.whatsapp.net", "");
-    const saluranLink = config.saluran?.link || config.bot?.support || "-";
-
     // ── Caption ──────────────────────────────────────────────
     const caption =
-      `ɴᴇxᴀ ʙᴏᴛ ɪɴꜰᴏʀᴍᴀᴛɪᴏɴ\n` +
+      `${botName.toUpperCase()} ɪɴꜰᴏʀᴍᴀᴛɪᴏɴ\n` +
       `━━━━━━━━━━━━━━\n\n` +
 
       `🤖 *ɪᴅᴇɴᴛɪᴛᴀs*\n` +

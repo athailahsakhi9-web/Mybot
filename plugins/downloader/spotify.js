@@ -1,226 +1,108 @@
-const fs = require("fs");
-const path = require("path");
-const axios = require("axios");
-const { execFile } = require("child_process");
-const { promisify } = require("util");
-
-const execFileAsync = promisify(execFile);
-
-const MIN_VALID_SIZE = 1024;
-const SPOTIFY_API = "https://api.nexray.eu.cc/downloader/spotifyplay";
-const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const fetch = require('node-fetch')
 
 const pluginConfig = {
-  name: "playspotify",
-  alias: ["playsp", "spotifyplay"],
-  category: "downloader",
-  description: "Cari & download lagu dari Spotify sebagai MP3",
-  usage: "<judul lagu>",
-  example: "playsp Mojang Priangan",
-  isOwner: false,
-  isPremium: false,
-  isGroup: false,
-  isPrivate: false,
-  cooldown: 15,
-  energi: 1,
-  isEnabled: true,
-};
-
-function looksLikeHtmlOrText(buffer) {
-  if (!buffer || buffer.length < 5) return false;
-  const head = buffer.slice(0, 20).toString("utf8").trim().toLowerCase();
-  return (
-    head.startsWith("<!doctype") ||
-    head.startsWith("<html") ||
-    head.startsWith("{") ||
-    head.startsWith("[")
-  );
+    name: 'spotify',
+    alias: ['spot', 'spotdl', 'spotifydl', 'song'],
+    category: 'downloader',
+    description: 'Download lagu MP3 dari Spotify',
+    usage: '.spotify <url track spotify>',
+    example: '.spotify https://open.spotify.com/track/5WOSNVChcadlsCRiqXE45K',
+    cooldown: 10,
+    energi: 1,
+    isEnabled: true
 }
 
-function detectAudioExt(buffer) {
-  if (!buffer || buffer.length < 12) return null;
-  
-  if (buffer.slice(0, 3).toString("utf8") === "ID3") return ".mp3";
-  if (buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0) return ".mp3";
-  
-  if (buffer.slice(4, 8).toString("utf8") === "ftyp") return ".m4a";
-
-  if (buffer.slice(0, 4).toString("utf8") === "OggS") return ".ogg";
-
-  if (buffer[0] === 0x1a && buffer[1] === 0x45 && buffer[2] === 0xdf && buffer[3] === 0xa3) {
-    return ".webm";
-  }
-
-  return null;
+// Map manual untuk font Small Caps
+const SMALL_CAPS_MAP = {
+    'a': 'ᴀ', 'b': 'ʙ', 'c': 'ᴄ', 'd': 'ᴅ', 'e': 'ᴇ', 'f': 'ꜰ', 'g': 'ɢ', 'h': 'ʜ', 'i': 'ɪ', 
+    'j': 'ᴊ', 'k': 'ᴋ', 'l': 'ʟ', 'm': 'ᴍ', 'n': 'ɴ', 'o': 'ᴏ', 'p': 'ᴘ', 'q': 'ǫ', 'r': 'ʀ', 
+    's': 's', 't': 'ᴛ', 'u': 'ᴜ', 'v': 'ᴠ', 'w': 'ᴡ', 'x': 'x', 'y': 'ʏ', 'z': 'ᴢ',
+    'A': 'ᴀ', 'B': 'ʙ', 'C': 'ᴄ', 'D': 'ᴅ', 'E': 'ᴇ', 'F': 'ꜰ', 'G': 'ɢ', 'H': 'ʜ', 'I': 'ɪ', 
+    'J': 'ᴊ', 'K': 'ᴋ', 'L': 'ʟ', 'M': 'ᴍ', 'N': 'ɴ', 'O': 'ᴏ', 'P': 'ᴘ', 'Q': 'ǫ', 'R': 'ʀ', 
+    'S': 's', 'T': 'ᴛ', 'U': 'ᴜ', 'V': 'ᴠ', 'W': 'ᴡ', 'X': 'x', 'Y': 'ʏ', 'Z': 'ᴢ'
 }
 
-async function searchSpotify(query) {
-  const res = await axios.get(SPOTIFY_API, {
-    params: { q: query },
-    headers: { "User-Agent": UA },
-    timeout: 20000,
-  });
-
-  const data = res.data;
-  if (!data?.status || !data?.result) {
-    throw new Error(`Lagu tidak ditemukan untuk: ${query}`);
-  }
-
-  const r = data.result;
-  return {
-    title: r.title,
-    artist: r.artist,
-    duration: r.duration,
-    thumbnail: r.thumbnail,
-    popularity: r.popularity,
-    album: r.album,
-    releaseAt: r.release_at,
-    downloadUrl: r.download_url,
-  };
+function toSmallCaps(text) {
+    return text.split('').map(char => SMALL_CAPS_MAP[char] || char).join('')
 }
 
-async function downloadToFile(url, tempDir) {
-  fs.mkdirSync(tempDir, { recursive: true });
-
-  const res = await axios.get(url, {
-    responseType: "arraybuffer",
-    timeout: 60000,
-    maxRedirects: 5,
-    headers: {
-      "User-Agent": UA,
-      Accept: "*/*",
-    },
-  });
-
-  const buffer = Buffer.from(res.data);
-  const contentType = String(res.headers?.["content-type"] || "").toLowerCase();
-
-  if (buffer.length < MIN_VALID_SIZE) {
-    throw new Error("Server download mengembalikan file kosong/terlalu kecil.");
-  }
-
-  if (
-    looksLikeHtmlOrText(buffer) ||
-    contentType.includes("text/html") ||
-    contentType.includes("application/json")
-  ) {
-    throw new Error("Link download bukan file audio langsung (server mengembalikan halaman/HTML/JSON).");
-  }
-
-  const ext = detectAudioExt(buffer) || ".m4a";
-  const inputPath = path.join(tempDir, `spotify_${Date.now()}${ext}`);
-  fs.writeFileSync(inputPath, buffer);
-  return { inputPath, ext };
+// Helper untuk mendownload file menjadi Buffer
+async function getMediaBuffer(url) {
+    const res = await fetch(url, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        timeout: 120000 // Timeout 2 Menit
+    })
+    if (!res.ok) throw new Error(`Gagal mendownload file audio (HTTP ${res.status})`)
+    const arrayBuf = await res.arrayBuffer()
+    return Buffer.from(arrayBuf)
 }
 
-async function toMp3(inputPath) {
-  const outputPath = inputPath.replace(/\.(m4a|webm|ogg|mp4|aac|opus)$/i, "") + "_final.mp3";
+async function handler(m, { sock, args }) {
+    let trackUrl = args[0] || (m.quoted?.text)
 
-  try {
-    await execFileAsync("ffmpeg", [
-      "-y",
-      "-analyzeduration", "20000000",
-      "-probesize", "20000000",
-      "-i", inputPath,
-      "-vn",
-      "-ar", "44100",
-      "-ac", "2",
-      "-b:a", "192k",
-      outputPath,
-    ]);
-  } catch (e) {
-    const stderrTail = String(e.stderr || e.message || "")
-      .split("\n")
-      .slice(-6)
-      .join("\n");
-    throw new Error(`Gagal convert ke MP3 (file mungkin corrupt).\n${stderrTail}`);
-  }
+    if (!trackUrl) {
+        return m.reply(toSmallCaps('⚠️ Masukkan link lagu Spotify!\n\n*Contoh:* .spotify https://open.spotify.com/track/5WOSNVChcadlsCRiqXE45K'))
+    }
 
-  return outputPath;
+    if (!trackUrl.includes('spotify.com')) {
+        return m.reply(toSmallCaps('⚠️ URL tidak valid! Harap masukkan link track Spotify yang benar.'))
+    }
+
+    await m.react('⏳')
+
+    try {
+        // 1. Tembak API Nexray
+        const apiUrl = `https://api.nexray.eu.cc/downloader/spotify?url=${encodeURIComponent(trackUrl)}`
+        const res = await fetch(apiUrl, { timeout: 60000 })
+
+        if (!res.ok) throw new Error(`API HTTP status ${res.status}`)
+
+        const json = await res.json()
+
+        if (!json || json.status === false || !json.result) {
+            throw new Error(json?.message || 'Gagal mengambil data lagu dari API Nexray')
+        }
+
+        // 2. Ekstraksi data dari JSON response Nexray
+        const title = json.result.title || 'Unknown Title'
+        const artist = json.result.artist || 'Unknown Artist'
+        const downloadUrl = json.result.url
+
+        if (!downloadUrl) {
+            throw new Error('Link download MP3 tidak ditemukan dari respons API')
+        }
+
+        await m.react('📥')
+
+        // 3. Unduh MP3 direct link menjadi Buffer
+        const audioBuffer = await getMediaBuffer(downloadUrl)
+
+        // 4. Buat Caption Informasi Lagu
+        let caption = `🎵 *${toSmallCaps('sᴘᴏᴛɪꜰʏ ᴅᴏᴡɴʟᴏᴀᴅᴇʀ')}*\n\n`
+        caption += `📌 *${toSmallCaps('ᴛɪᴛʟᴇ')}*: ${title}\n`
+        caption += `👤 *${toSmallCaps('ᴀʀᴛɪsᴛ')}*: ${artist}\n\n`
+        caption += `⚡ *${toSmallCaps('ᴘᴏᴡᴇʀᴇᴅ ʙʏ')}*: Nexray API`
+
+        // 5. Kirim Audio ke Chat
+        await sock.sendMessage(m.chat, {
+            audio: audioBuffer,
+            mimetype: 'audio/mp4',
+            ptt: false,
+            fileName: `${title} - ${artist}.mp3`,
+            caption: caption
+        }, { quoted: m })
+
+        await m.react('✅')
+
+    } catch (err) {
+        await m.react('❌')
+        return m.reply(toSmallCaps(`❌ Gagal mendownload lagu Spotify: ${err.message}`))
+    }
 }
 
 module.exports = {
-  config: pluginConfig,
-
-  async handler(m, { sock }) {
-    const query = m.text?.trim();
-
-    if (!query) {
-      return m.reply(
-        `🎧 ᴘʟᴀʏ sᴘᴏᴛɪꜰʏ\n\n` +
-        `> Cari & download lagu dari Spotify!\n\n` +
-        `Usage:\n\`${m.prefix}playsp <judul lagu>\`\n\n` +
-        `Contoh:\n\`${m.prefix}playsp Mojang Priangan\``
-      );
-    }
-
-    const tempDir = path.join(process.cwd(), "output");
-    const tempFiles = [];
-
-    await m.react("🎧");
-    await m.reply(`⏳ ʟᴀɢɪ ᴀᴋᴜ ᴄᴀʀɪ ɴɪᴄʜ *${query}* ᴅɪ ꜱᴘᴏᴛɪꜰʏ...`);
-
-    let info;
-    try {
-      info = await searchSpotify(query);
-    } catch (err) {
-      await m.react("❌");
-      return m.reply(`❌ ᴍᴀᴀꜰ ᴛᴜᴀɴ ɢᴀɢᴀʟ ᴍᴇɴᴄᴀʀɪ ʟᴀɢɪ\n\n> ${err.message}`);
-    }
-
-    if (!info.downloadUrl) {
-      await m.react("❌");
-      return m.reply(`❌ ʟᴀɢᴜ ᴅɪᴛᴇᴍᴜᴋᴀɴ ᴛᴀᴘɪ ᴛɪᴅᴀᴋ ᴀᴅᴀ ʟɪɴᴋ ᴅᴏᴡɴʟᴏᴀᴅ\n\n🎵 *${info.title}*`);
-    }
-
-    const infoText =
-      `🎧 ᴋᴇᴛᴇᴍᴜ ɴɪʜ! ʟᴀɢɪ ᴅᴏᴡɴʟᴏᴀᴅ & ᴄᴏɴᴠᴇʀᴛ ᴋᴇ ᴍᴘ3...\n\n` +
-      `🎵 *${info.title}*\n` +
-      `👤 ᴀʀᴛɪꜱ: ${info.artist}\n` +
-      `💿 ᴀʟʙᴜᴍ: ${info.album}\n` +
-      `⏱️ ᴅᴜʀᴀꜱɪ: ${info.duration}\n` +
-      `📅 ʀɪʟɪꜱ: ${info.releaseAt}\n` +
-      `🔥 ᴘᴏᴘᴜʟᴀʀɪᴛᴀꜱ: ${info.popularity}/100`;
-
-    try {
-      if (info.thumbnail) {
-        await sock.sendMessage(m.chat, { image: { url: info.thumbnail }, caption: infoText }, { quoted: m });
-      } else {
-        await sock.sendMessage(m.chat, { text: infoText }, { quoted: m });
-      }
-    } catch {
-      await sock.sendMessage(m.chat, { text: infoText }, { quoted: m }).catch(() => {});
-    }
-
-    try {
-      const { inputPath, ext } = await downloadToFile(info.downloadUrl, tempDir);
-      tempFiles.push(inputPath);
-
-      let finalAudioPath;
-      if (ext === ".mp3") {
-        finalAudioPath = inputPath;
-      } else {
-        finalAudioPath = await toMp3(inputPath);
-        tempFiles.push(finalAudioPath);
-      }
-
-      await sock.sendMessage(m.chat, {
-        audio: { url: finalAudioPath },
-        mimetype: "audio/mpeg",
-        ptt: false,
-        fileName: `${info.title}.mp3`,
-      }, { quoted: m });
-
-      await m.react("✅");
-    } catch (err) {
-      await m.react("❌");
-      await m.reply(`❌ *Gagal download/convert MP3*\n\n> ${err.message}`);
-    } finally {
-      for (const file of tempFiles) {
-        try {
-          if (file && fs.existsSync(file)) fs.unlinkSync(file);
-        } catch {}
-      }
-    }
-  },
-};
+    config: pluginConfig,
+    handler
+}

@@ -1,3 +1,4 @@
+
 const { getAllPlugins } = require("../../src/lib/plugins");
 const path = require("path");
 const fs   = require("fs");
@@ -124,6 +125,10 @@ module.exports = {
     const allPlugins = getUniquePlugins(m.isOwner);
     const totalCmd   = allPlugins.length;
 
+    // ── Config dari config/index.js ─────────────────────────
+    const botName   = config.bot?.name      || "NexaBot";
+    const devName   = config.bot?.developer || "NexaDev";
+
     // Group plugins by category
     const categoryMap = {};
     allPlugins.forEach(p => {
@@ -143,7 +148,7 @@ module.exports = {
 
     // Build menu text
     let menuText = "";
-    menuText += `╭━━━〔 𝗡𝗘𝗫𝗔 𝗕𝗢𝗧 〕━━━⬣\n`;
+    menuText += `╭━━━〔 ${botName.toUpperCase()} 〕━━━⬣\n`;
     menuText += `┃ 👤 ᴜꜱᴇʀ    : ${m.pushName || "ᴘᴇɴɢɢᴜɴᴀ"}\n`;
     menuText += `┃ 📅 ᴅᴀᴛᴇ    : ${dateStr}\n`;
     menuText += `┃ ⏰ ᴛɪᴍᴇ    : ${timeStr} WIB\n`;
@@ -168,21 +173,20 @@ module.exports = {
       menuText += `╰──────────────⬣\n\n`;
     }
 
-    menuText += `╭───〔 💖 *${config.bot?.name || "NexaBot"}* 〕───⬣\n`;
+    menuText += `╭───〔 💖 *${botName}* 〕───⬣\n`;
     menuText += `│  ☘︎ "ʏᴏᴜʀ ʙᴏᴛ, ʏᴏᴜʀ ʀᴜʟᴇꜱ"\n`;
-    menuText += `│ ⓘ  ᴘᴏᴡᴇʀᴇᴅ ʙʏ ɴᴇxᴀᴅᴇᴠ\n`;
+    menuText += `│ ⓘ  ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${devName}\n`;
     menuText += `│ ⓘ ᴋᴇᴛɪᴋ \`${prefix}help <command>\` ᴜɴᴛᴜᴋ ɪɴꜰᴏ ᴅᴇᴛᴀɪʟ\n`;
     menuText += `╰──────────────⬣`;
 
     // ====== HANYA forwardingScore + isForwarded (tanpa externalAdReply) ======
-    // Dihilangkan externalAdReply karena user tidak mau tampilan link preview
     const contextInfo = {
       forwardingScore: 999,
       isForwarded: true,
     };
 
     // ====== Build fake quoted (WhatsApp Business style) ======
-    const fakeQuoted = makeFakeQuoted(config.bot?.name || "NexaBot");
+    const fakeQuoted = makeFakeQuoted(botName);
 
     // Try send as image with caption + fake quoted
     const imgExists = fs.existsSync(BANNER_IMG);

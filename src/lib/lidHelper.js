@@ -1,13 +1,4 @@
-/**
- * Cache LID to JID mapping
- * Panggil ini saat memproses group metadata untuk menyimpan mapping
- * 
- * HANDLES TWO DIFFERENT STRUCTURES:
- * 1. groupMetadata.participants: { id: PN, lid: LID, admin }
- * 2. GroupHandler events:        { id: LID, phoneNumber: PN, admin }
- * 
- * @param {Object[]} participants - Array participant
- */
+
 function cacheParticipantLids(participants = []) {
     for (const p of participants) {
         let pLid = '';
@@ -35,32 +26,15 @@ function cacheParticipantLids(participants = []) {
     }
 }
 
-/**
- * Get cached JID for a LID
- * @param {string} lid - LID atau LID-converted JID
- * @returns {string|null} Cached JID atau null jika tidak ada
- */
 function getCachedJid(lid) {
     return lidCache.get(lid) || null;
 }
 
-/**
- * Cek apakah JID adalah format LID
- * @param {string} jid - JID untuk dicek
- * @returns {boolean} True jika LID
- */
 function isLid(jid) {
     if (!jid) return false;
     return jid.endsWith('@lid');
 }
 
-/**
- * Cek apakah JID adalah hasil konversi LID yang salah
- * (JID dengan suffix @s.whatsapp.net tapi nomornya adalah LID number, bukan phone number)
- * LID number biasanya: sangat panjang, tidak dimulai dengan kode negara normal
- * @param {string} jid - JID untuk dicek
- * @returns {boolean} True jika kemungkinan LID yang sudah dikonversi
- */
 function isLidConverted(jid) {
     if (!jid) return false;
     if (!jid.endsWith('@s.whatsapp.net')) return false;
@@ -87,14 +61,6 @@ function isLidConverted(jid) {
     return true;
 }
 
-/**
- * Convert LID ke format JID standard
- * CATATAN: LID memiliki ID unik yang berbeda dari nomor telepon.
- * Fungsi ini hanya mengganti suffix, untuk mendapatkan nomor asli
- * gunakan resolveLidFromParticipants dengan group metadata.
- * @param {string} jid - JID yang mungkin LID
- * @returns {string} JID dalam format @s.whatsapp.net
- */
 function lidToJid(jid) {
     if (!jid) return jid;
     if (jid.endsWith('@lid')) {
@@ -103,26 +69,11 @@ function lidToJid(jid) {
     return jid;
 }
 
-/**
- * Extract nomor dari JID apapun (termasuk LID)
- * @param {string} jid - JID
- * @returns {string} Nomor telepon
- */
 function extractNumber(jid) {
     if (!jid) return '';
     return jid.replace(/@.+/g, '');
 }
 
-/**
- * Resolve LID atau LID-converted JID ke JID asli menggunakan group metadata
- * Participant structure dari ourin (groups.js):
- * - id: phone_number atau jid (tergantung addressingMode)
- * - lid: LID format
- * - admin: type admin
- * @param {string} jid - JID yang mungkin LID atau LID-converted
- * @param {Object[]} participants - Array participant dari group metadata
- * @returns {string} JID yang sudah resolve ke nomor asli
- */
 function resolveLidFromParticipants(jid, participants = []) {
     if (!jid) return jid;
     if (!participants || participants.length === 0) return jid;
@@ -160,23 +111,14 @@ function resolveLidFromParticipants(jid, participants = []) {
     return isLid(jid) ? lidToJid(jid) : jid;
 }
 
-/**
- * Resolve JID yang mungkin LID-converted ke JID asli
- * Fungsi ini menangani case dimana JID sudah punya @s.whatsapp.net tapi nomornya adalah LID number
- * @param {string} jid - JID untuk diresolve
- * @param {Object[]} participants - Array participant dari group metadata
- * @returns {string} JID dengan nomor telepon asli
- */
 function resolveAnyLidToJid(jid, participants = []) {
     if (!jid) return jid;
     
-    // Check cache first (penting untuk goodbye dimana participant sudah keluar)
     const cached = getCachedJid(jid);
     if (cached) {
         return cached;
     }
     
-    // Also check LID format in cache
     if (jid.endsWith('@s.whatsapp.net')) {
         const lidFormat = jid.replace('@s.whatsapp.net', '@lid');
         const cachedFromLid = getCachedJid(lidFormat);
@@ -240,23 +182,12 @@ function resolveAnyLidToJid(jid, participants = []) {
     return jid;
 }
 
-/**
- * Convert array of JIDs, replacing any LIDs or LID-converted JIDs
- * @param {string[]} jids - Array of JIDs
- * @param {Object[]} participants - Optional group participants
- * @returns {string[]} Array of converted JIDs
- */
 function convertLidArray(jids, participants = []) {
     if (!Array.isArray(jids)) return [];
     
     return jids.map(jid => resolveAnyLidToJid(jid, participants));
 }
 
-/**
- * Decode JID dan kembalikan dalam format standard
- * @param {string} jid - JID untuk didecode
- * @returns {string|null} JID yang sudah didecode atau null
- */
 function decodeAndNormalize(jid) {
     if (!jid) return null;
     if (isLid(jid)) {
@@ -271,12 +202,6 @@ function decodeAndNormalize(jid) {
     return jid;
 }
 
-/**
- * Konversi participant JID dari message
- * @param {Object} msg - Message object
- * @param {Object} sock - Socket connection
- * @returns {Promise<string>} Resolved participant JID
- */
 async function resolveParticipant(msg, sock) {
     const participant = msg.key?.participant;
     if (!participant) return null;
@@ -295,37 +220,20 @@ async function resolveParticipant(msg, sock) {
     return lidToJid(participant);
 }
 
-/**
- * Helper untuk mendapatkan JID asli dari participant (dengan group metadata)
- * Berdasarkan struktur participant dari Baileys:
- * - id: bisa LID atau JID asli
- * - jid: JID asli (nomor telepon)
- * - lid: LID untuk participant
- * @param {Object} participant - Participant object dari groupMetadata.participants
- * @returns {string} JID yang bisa digunakan untuk mention
- */
 function getParticipantJid(participant) {
     if (!participant) return '';
     
-    // Prefer p.jid (real phone number) - this is the most reliable
     if (participant.jid && !participant.jid.endsWith('@lid') && !isLidConverted(participant.jid)) {
         return participant.jid;
     }
     
-    // Fallback to p.id if it's a real JID (bukan LID dan bukan LID-converted)
     if (participant.id && !participant.id.endsWith('@lid') && !isLidConverted(participant.id)) {
         return participant.id;
     }
     
-    // Fallback: konversi LID ke format JID (ini mungkin masih salah)
     return lidToJid(participant.id || participant.lid || '');
 }
 
-/**
- * Convert semua participant IDs ke format yang bisa di-mention
- * @param {Object[]} participants - Array participant dari groupMetadata
- * @returns {string[]} Array of JIDs
- */
 function getParticipantJids(participants = []) {
     return participants.map(p => getParticipantJid(p));
 }

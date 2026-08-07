@@ -1,11 +1,3 @@
-// ╔══════════════════════════════════════════╗
-// ║      NEXA BOT - JADIBOT MANAGER v1.0.0    ║
-// ╚══════════════════════════════════════════╝
-// Mengelola sub-bot ("jadibot") yang berjalan di proses yang sama dengan
-// bot utama. Setiap sub-bot punya session/auth sendiri (terpisah dari
-// session bot utama) tapi memakai plugin & handler yang sama persis
-// seperti bot utama (fitur disamakan 1:1).
-
 const {
   default: makeWASocket,
   DisconnectReason,
@@ -61,7 +53,10 @@ async function createJadiBotSession(number, requesterJid, mainSock) {
 
   async function connect() {
     const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
-    const version = [2, 3000, 1034074495];
+
+    // Versi Baileys di-hardcode manual (samain kayak connection.js).
+    const version = [2, 3000, 1043857760];
+    colors.logger.info("WA", `[JadiBot] Baileys version: v${version.join(".")} (manual)`);
 
     const sock = makeWASocket({
       version,
@@ -95,7 +90,7 @@ async function createJadiBotSession(number, requesterJid, mainSock) {
           pairingRequested = true;
           await new Promise(r => setTimeout(r, 3000));
           try {
-            const code = await sock.requestPairingCode(number);
+            const code = await sock.requestPairingCode(number, "NEXAABOT");
             colors.logger.success("JadiBot", `Pairing code untuk ${number}: ${code}`);
             if (mainSock && requesterJid) {
               await mainSock.sendMessage(requesterJid, {

@@ -1,25 +1,25 @@
 const config = {
   bot: {
     name: "Nexa Bot",
-    version: "1.0.0",
-    description: "WhatsApp Bot Powered by Baileys",
+    version: "1.1.0",
+    description: "WhatsApp Bot By NexaDev",
     developer: "Nexa Dev",
-    support: "https://wa.me/628xxxxxxxxxx",
-    number: "628xxxxxxxxxx",
+    support: "https://wa.me/628xxxx",
+    number: "628xxxxxx", // samakan dengan pairing code
     prefix: ".",
   },
 
   session: {
     folderName: "session",
     usePairingCode: true,
-    pairingNumber: "628xxxxxxxxxx",
+    pairingNumber: "628xxxxxxxx", // nomer pairing code 
     printQRInTerminal: false,
     maxReconnectAttempts: 10,
     reconnectInterval: 5000,
   },
 
   owner: [
-    "628xxxxxxxxxx@s.whatsapp.net",
+    "628xxxxxx@s.whatsapp.net", //masukan nomer owner
   ],
 
   partner: [],
@@ -27,7 +27,7 @@ const config = {
   saluran: {
     id: "120363208449943317@newsletter",
     name: "Nexa Bot",
-    link: "https://wa.me/628xxxxxxxxxx",
+    link: "https://wa.me/628xxxxxx",
   },
 
   features: {
@@ -70,11 +70,15 @@ const config = {
     prefix: ".",
   },
 
+  // 🔑 api key daftar di api.nexadev.my.id/home 
   APIkey: {
-    nexaai: "", // ← Ganti dengan API key di api.nexadev.my.id/home
-    groq: "",
-    openai: "",
-    gemini: "",
+    nexaai: "", // samakan dengan apinexa
+    apinexa: "", // ← Topup Limit/premium di topup.nexapanel.my.id
+  },
+
+  // 🌐 Base Endpoint URL API NexaDev
+  api: {
+    apinexa: "https://api.nexadev.my.id", // ← Endpoint URL NexaDev
   },
 
   dev: {
